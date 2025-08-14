@@ -13,7 +13,7 @@ logging.basicConfig(
 
 # === Dictionary file list ===
 DICTIONARY_FILES = [
-    "1.txt", "eng_news_2005_1M-sentences.txt", "eng_news_2005_1M-words.txt",
+    "eng_news_2005_1M-sentences.txt", "eng_news_2005_1M-words.txt",
     "eng_news_2005_1M-sources.txt", "eng_news_2005_1M-co_n.txt",
     "eng_news_2005_1M-co_s.txt", "eng_news_2005_1M-inv_so.txt",
     "eng_news_2005_1M-meta.txt", "Dictionary.txt",
