@@ -9,6 +9,7 @@ import binascii
 import logging
 import paq  # Python binding for PAQ9a (pip install paq)
 import hashlib
+from enum import Enum  # Import Enum
 from typing import List, Dict, Tuple, Optional
 
 # === Configure Logging ===
@@ -102,7 +103,7 @@ def generate_pi_digits(num_digits: int = 3, filename: str = PI_DIGITS_FILE) -> L
 
 PI_DIGITS = generate_pi_digits(3)
 
-# === Helper Classes and Functions from PAQJP_6 ===
+# === Helper Classes and Functions ===
 class Filetype(Enum):
     DEFAULT = 0
     JPEG = 1
