@@ -2,7 +2,7 @@ import os
 import sys
 import logging
 import hashlib
-import paq
+import paq  # Python binding for PAQ9a (pip install paq)
 
 # === Configure Logging ===
 logging.basicConfig(
@@ -62,26 +62,26 @@ class SmartCompressor:
                 logging.warning(f"Error searching {filename}: {e}")
         return None
 
-    def zlib_compress(self, data):
-        """Compress data using zlib (lossless)."""
-        logging.info("Starting zlib compression...")
+    def paq_compress(self, data):
+        """Compress data using PAQ9a (lossless)."""
+        logging.info("Starting PAQ9a compression...")
         try:
-            compressed = paq.compress(data)
-            logging.info("Zlib compression complete.")
+            compressed = paq.compress(data)  # Using paq.compress from PAQ9a module
+            logging.info("PAQ9a compression complete.")
             return compressed
         except Exception as e:
-            logging.error(f"Zlib compression failed: {e}")
+            logging.error(f"PAQ9a compression failed: {e}")
             raise
 
-    def zlib_decompress(self, data):
-        """Decompress data using zlib (lossless)."""
-        logging.info("Starting zlib decompression...")
+    def paq_decompress(self, data):
+        """Decompress data using PAQ9a (lossless)."""
+        logging.info("Starting PAQ9a decompression...")
         try:
-            decompressed = paq.decompress(data)
-            logging.info("Zlib decompression complete.")
+            decompressed = paq.decompress(data)  # Using paq.decompress from PAQ9a module
+            logging.info("PAQ9a decompression complete.")
             return decompressed
         except Exception as e:
-            logging.error(f"Zlib decompression failed: {e}")
+            logging.error(f"PAQ9a decompression failed: {e}")
             raise
 
     def reversible_transform(self, data):
@@ -110,7 +110,7 @@ class SmartCompressor:
             return None
 
     def compress(self, input_file, output_file):
-        """Compress a file with hash verification using zlib."""
+        """Compress a file with hash verification using PAQ9a."""
         if not os.path.exists(input_file):
             logging.error(f"Input file {input_file} not found.")
             return
@@ -154,7 +154,7 @@ class SmartCompressor:
         # Normal compression flow (lossless)
         transformed = self.reversible_transform(original_data)
         try:
-            compressed = self.zlib_compress(transformed)
+            compressed = self.paq_compress(transformed)
         except Exception:
             return
 
@@ -188,7 +188,7 @@ class SmartCompressor:
             return
 
         try:
-            decompressed = self.zlib_decompress(compressed_data)
+            decompressed = self.paq_decompress(compressed_data)
         except Exception:
             return
         original = self.reverse_reversible_transform(decompressed)
@@ -210,7 +210,7 @@ class SmartCompressor:
 # === Main Menu ===
 def main():
     print("Created by Jurijus Pacalovas")
-    print("Using Smart Compressor (Zlib + Reversible)")
+    print("Using Smart Compressor (PAQ9a + Reversible)")
     
     compressor = SmartCompressor()
     print("1. Compress\n2. Decompress")
