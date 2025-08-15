@@ -333,9 +333,9 @@ def main():
     print("Created by Jurijus Pacalovas")
     print("Choose compression system:")
     print("1. Smart Compressor (Zlib + Reversible)")
-    print("2. XOR + Zlib Compressor")
+    
     try:
-        choice = input("Enter 1 or 2: ").strip()
+        choice = 1
     except KeyboardInterrupt:
         logging.info("Program terminated by user.")
         sys.exit(0)
