@@ -94,7 +94,7 @@ class SmartCompressor:
     def reverse_reversible_transform(self, data):
         """Reverse the XOR transform (symmetric)."""
         logging.info("Reversing XOR transform (0xAA)...")
-        transformed = self.reversible_transform(data)
+        transformed = self.reversible_transform(data)  # XOR with 0xAA is symmetric
         logging.info("XOR transform reversed.")
         return transformed
 
@@ -207,172 +207,29 @@ class SmartCompressor:
         except Exception as e:
             logging.error(f"Failed to write {output_file}: {e}")
 
-# === XOR + Zlib Compressor ===
-def transform_with_pattern(data, chunk_size=4):
-    """Apply reversible XOR transform with 0xFF in chunks."""
-    logging.info("Applying XOR transform (0xFF)...")
-    transformed = bytearray()
-    for i in range(0, len(data), chunk_size):
-        chunk = data[i:i + chunk_size]
-        transformed.extend(b ^ 0xFF for b in chunk)
-    logging.info("XOR transform complete.")
-    return transformed
-
-def is_prime(n):
-    """Check if a number is prime."""
-    if n < 2: return False
-    if n == 2: return True
-    if n % 2 == 0: return False
-    for i in range(3, int(n**0.5)+1, 2):
-        if n % i == 0:
-            return False
-    return True
-
-def find_nearest_prime_around(n):
-    """Find the nearest prime number to n."""
-    offset = 0
-    while True:
-        if is_prime(n - offset):
-            return n - offset
-        if is_prime(n + offset):
-            return n + offset
-        offset += 1
-
-def encode_with_zlib(compressor):
-    """Encode a file using XOR + zlib compression."""
-    input_file = input("Enter input file: ").strip()
-    output_file = input("Enter output base name (.enc will be added): ").strip()
-
-    if not os.path.exists(input_file):
-        logging.error(f"Input file {input_file} not found.")
-        return
-    if not os.access(input_file, os.R_OK):
-        logging.error(f"No read permission for {input_file}.")
-        return
-
-    try:
-        with open(input_file, 'rb') as f:
-            original = f.read()
-    except Exception as e:
-        logging.error(f"Failed to read {input_file}: {e}")
-        return
-
-    # Compute and display SHA-256
-    original_hash = hashlib.sha256(original).hexdigest()
-    logging.info(f"SHA-256 of input: {original_hash}")
-
-    # Check if hash exists in dictionaries
-    found = compressor.find_hash_in_dictionaries(original_hash)
-    if found:
-        logging.info(f"Hash found in dictionary: {found}")
-    else:
-        logging.info("Hash not found in any dictionary. Proceeding with lossless compression.")
-
-    transformed = transform_with_pattern(original)
-    try:
-        compressed = compressor.zlib_compress(transformed)
-    except Exception as e:
-        logging.error(f"Zlib compression failed: {e}")
-        return
-
-    try:
-        with open(output_file + ".enc", 'wb') as f:
-            f.write(hashlib.sha256(original).digest())  # 32-byte hash
-            f.write(compressed)
-    except Exception as e:
-        logging.error(f"Failed to write {output_file}.enc: {e}")
-        return
-
-    size = len(compressed)
-    prime = find_nearest_prime_around(size // 2)
-    logging.info(f"Compressed size: {size} bytes. Nearest prime: {prime}")
-
-def decode_with_zlib(compressor):
-    """Decode a file using zlib + XOR decompression."""
-    input_file = input("Enter .enc file: ").strip()
-    output_file = input("Enter output file: ").strip()
-
-    if not os.path.exists(input_file):
-        logging.error(f"File {input_file} not found.")
-        return
-    if not os.access(input_file, os.R_OK):
-        logging.error(f"No read permission for {input_file}.")
-        return
-
-    try:
-        with open(input_file, 'rb') as f:
-            stored_hash = f.read(32)  # Read 32-byte SHA-256 hash
-            compressed = f.read()
-    except Exception as e:
-        logging.error(f"Failed to read {input_file}: {e}")
-        return
-
-    try:
-        decompressed = compressor.zlib_decompress(compressed)
-    except Exception as e:
-        logging.error(f"Zlib decompression failed: {e}")
-        return
-    recovered = transform_with_pattern(decompressed)
-
-    computed_hash = hashlib.sha256(recovered).digest()
-    if computed_hash == stored_hash:
-        logging.info("Hash verification successful.")
-    else:
-        logging.error("Hash verification failed! Data may be corrupted.")
-        return
-
-    try:
-        with open(output_file, 'wb') as f:
-            f.write(recovered)
-        logging.info(f"Decoded and saved to {output_file}.")
-    except Exception as e:
-        logging.error(f"Failed to write {output_file}: {e}")
-
 # === Main Menu ===
 def main():
     print("Created by Jurijus Pacalovas")
-    print("Choose compression system:")
-    print("1. Smart Compressor (Zlib + Reversible)")
+    print("Using Smart Compressor (Zlib + Reversible)")
     
+    compressor = SmartCompressor()
+    print("1. Compress\n2. Decompress")
     try:
-        choice = int(1)
+        action = input("Select action: ").strip()
     except KeyboardInterrupt:
         logging.info("Program terminated by user.")
         sys.exit(0)
-
-    compressor = SmartCompressor()
-    if choice == "1":
-        print("1. Compress\n2. Decompress")
-        try:
-            action = input("Select action: ").strip()
-        except KeyboardInterrupt:
-            logging.info("Program terminated by user.")
-            sys.exit(0)
-        if action == "1":
-            i = input("Input file: ").strip()
-            o = input("Output file: ").strip()
-            compressor.compress(i, o)
-        elif action == "2":
-            i = input("Compressed file: ").strip()
-            o = input("Output file: ").strip()
-            compressor.decompress(i, o)
-        else:
-            logging.error("Invalid action. Please enter 1 or 2.")
-    elif choice == "2":
-        print("1. Encode\n2. Decode")
-        try:
-            action = input("Select action: ").strip()
-        except KeyboardInterrupt:
-            logging.info("Program terminated by user.")
-            sys.exit(0)
-        if action == "1":
-            encode_with_zlib(compressor)
-        elif action == "2":
-            decode_with_zlib(compressor)
-        else:
-            logging.error("Invalid action. Please enter 1 or 2.")
+    
+    if action == "1":
+        i = input("Input file: ").strip()
+        o = input("Output file: ").strip()
+        compressor.compress(i, o)
+    elif action == "2":
+        i = input("Compressed file: ").strip()
+        o = input("Output file: ").strip()
+        compressor.decompress(i, o)
     else:
-        logging.error("Invalid choice. Please enter 1 or 2.")
+        logging.error("Invalid action. Please enter 1 or 2.")
 
 if __name__ == "__main__":
     main()
