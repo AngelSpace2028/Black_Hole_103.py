@@ -335,7 +335,7 @@ def main():
     print("1. Smart Compressor (Zlib + Reversible)")
     
     try:
-        choice = 1
+        choice = int(1)
     except KeyboardInterrupt:
         logging.info("Program terminated by user.")
         sys.exit(0)
