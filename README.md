@@ -1,2 +1,2 @@
 Link for Dictionary:
-https://drive.google.com/file/d/1lfCk0EeT_ZBZa4n4fRNGluo7AJLe8bcO/view?usp=drive_link
+https://drive.google.com/file/d/1bvf055VOuvKSe0vBAUdVUuyHpKD2A1CX/view?usp=drive_link
