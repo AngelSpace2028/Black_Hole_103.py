@@ -8,25 +8,25 @@ import heapq
 import binascii
 import logging
 import paq  # Python binding for PAQ9a (pip install paq)
-import zlib
 import hashlib
-from enum import Enum
-from typing import List, Dict, Tuple, Optional, Union
-from mpmath import mp
+from enum import Enum  # Import Enum
+from typing import List, Dict, Tuple, Optional
 
-# Configure logging
+# === Configure Logging ===
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[logging.StreamHandler()]
 )
 
-# Constants
+# === Constants ===
 PROGNAME = "PAQJP_6_Smart"
-HUFFMAN_THRESHOLD = 1024  # Bytes threshold for Huffman vs. PAQ/zlib compression
+HUFFMAN_THRESHOLD = 1024  # Bytes threshold for Huffman vs. paq compression
 PI_DIGITS_FILE = "pi_digits.txt"
 PRIMES = [p for p in range(2, 256) if all(p % d != 0 for d in range(2, int(p**0.5)+1))]
 MEM = 1 << 15  # 32,768
+
+# === Dictionary file list ===
 DICTIONARY_FILES = [
     "eng_news_2005_1M-sentences.txt", "eng_news_2005_1M-words.txt",
     "eng_news_2005_1M-sources.txt", "eng_news_2005_1M-co_n.txt",
@@ -36,7 +36,7 @@ DICTIONARY_FILES = [
     "words.txt.paq", "lines.txt.paq", "sentence.txt.paq"
 ]
 
-# Pi Digits Functions
+# === Pi Digits Functions ===
 def save_pi_digits(digits: List[int], filename: str = PI_DIGITS_FILE) -> bool:
     try:
         with open(filename, 'w') as f:
@@ -81,6 +81,7 @@ def generate_pi_digits(num_digits: int = 3, filename: str = PI_DIGITS_FILE) -> L
     if loaded_digits is not None:
         return loaded_digits
     try:
+        from mpmath import mp
         mp.dps = num_digits
         pi_digits = [int(d) for d in mp.pi.digits(10)[0]]
         if len(pi_digits) != num_digits:
@@ -102,85 +103,11 @@ def generate_pi_digits(num_digits: int = 3, filename: str = PI_DIGITS_FILE) -> L
 
 PI_DIGITS = generate_pi_digits(3)
 
-# Helper Classes
+# === Helper Classes and Functions ===
 class Filetype(Enum):
     DEFAULT = 0
     JPEG = 1
     TEXT = 3
-
-class String:
-    def __init__(self, s: str = ""):
-        self.data = bytearray(s.encode('utf-8'))
-    
-    def resize(self, new_size: int):
-        if new_size > len(self.data):
-            self.data += bytearray(new_size - len(self.data))
-        else:
-            self.data = self.data[:new_size]
-    
-    def size(self) -> int:
-        return len(self.data)
-    
-    def c_str(self) -> str:
-        return self.data.decode('utf-8', errors='ignore')
-    
-    def __iadd__(self, s: str):
-        self.data += s.encode('utf-8')
-        return self
-    
-    def __getitem__(self, index: int) -> int:
-        return self.data[index]
-    
-    def __setitem__(self, index: int, value: int):
-        self.data[index] = value
-    
-    def __str__(self) -> str:
-        return self.data.decode('utf-8', errors='ignore')
-
-class Array:
-    def __init__(self, size: int = 0, initial_value: int = 0):
-        self.data = array.array('B', [initial_value] * size)
-    
-    def resize(self, new_size: int):
-        if new_size > len(self.data):
-            self.data.extend([0] * (new_size - len(self.data)))
-        else:
-            self.data = self.data[:new_size]
-    
-    def size(self) -> int:
-        return len(self.data)
-    
-    def __getitem__(self, index: int) -> int:
-        return self.data[index]
-    
-    def __setitem__(self, index: int, value: int):
-        self.data[index] = value
-    
-    def __len__(self) -> int:
-        return len(self.data)
-
-class Buf:
-    def __init__(self, size: int = 0):
-        self.size_ = size
-        self.data = Array(size)
-        self.pos = 0
-    
-    def setsize(self, size: int):
-        if size > 0 and (size & (size - 1)) == 0:
-            self.size_ = size
-            self.data.resize(size)
-    
-    def __getitem__(self, index: int) -> int:
-        return self.data[index & (self.size_ - 1)]
-    
-    def __call__(self, i: int) -> int:
-        assert i > 0
-        return self.data[(self.pos - i) & (self.size_ - 1)]
-    
-    def size(self) -> int:
-        return self.size_
-
-buf = Buf()
 
 class Node:
     def __init__(self, left=None, right=None, symbol=None):
@@ -191,80 +118,6 @@ class Node:
     def is_leaf(self):
         return self.left is None and self.right is None
 
-class StateTable:
-    def __init__(self):
-        self.table = [
-            [1, 2, 0, 0], [3, 5, 1, 0], [4, 6, 0, 1], [7, 10, 2, 0],
-            [8, 12, 1, 1], [9, 13, 1, 1], [11, 14, 0, 2], [15, 19, 3, 0],
-            [16, 23, 2, 1], [17, 24, 2, 1], [18, 25, 2, 1], [20, 27, 1, 2],
-            [21, 28, 1, 2], [22, 29, 1, 2], [26, 30, 0, 3], [31, 33, 4, 0],
-            [32, 35, 3, 1], [32, 35, 3, 1], [32, 35, 3, 1], [32, 35, 3, 1],
-            [34, 37, 2, 2], [34, 37, 2, 2], [34, 37, 2, 2], [34, 37, 2, 2],
-            [34, 37, 2, 2], [34, 37, 2, 2], [36, 39, 1, 3], [36, 39, 1, 3],
-            [36, 39, 1, 3], [36, 39, 1, 3], [38, 40, 0, 4], [41, 43, 5, 0],
-            [42, 45, 4, 1], [42, 45, 4, 1], [44, 47, 3, 2], [44, 47, 3, 2],
-            [46, 49, 2, 3], [46, 49, 2, 3], [48, 51, 1, 4], [48, 51, 1, 4],
-            [50, 52, 0, 5], [53, 43, 6, 0], [54, 57, 5, 1], [54, 57, 5, 1],
-            [56, 59, 4, 2], [56, 59, 4, 2], [58, 61, 3, 3], [58, 61, 3, 3],
-            [60, 63, 2, 4], [60, 63, 2, 4], [62, 65, 1, 5], [62, 65, 1, 5],
-            [50, 66, 0, 6], [67, 55, 7, 0], [68, 57, 6, 1], [68, 57, 6, 1],
-            [70, 73, 5, 2], [70, 73, 5, 2], [72, 75, 4, 3], [72, 75, 4, 3],
-            [74, 77, 3, 4], [74, 77, 3, 4], [76, 79, 2, 5], [76, 79, 2, 5],
-            [62, 81, 1, 6], [62, 81, 1, 6], [64, 82, 0, 7], [83, 69, 8, 0],
-            [84, 76, 7, 1], [84, 76, 7, 1], [86, 73, 6, 2], [86, 73, 6, 2],
-            [44, 59, 5, 3], [44, 59, 5, 3], [58, 61, 4, 4], [58, 61, 4, 4],
-            [60, 49, 3, 5], [60, 49, 3, 5], [76, 89, 2, 6], [76, 89, 2, 6],
-            [78, 91, 1, 7], [78, 91, 1, 7], [80, 92, 0, 8], [93, 69, 9, 0],
-            [94, 87, 8, 1], [94, 87, 8, 1], [96, 45, 7, 2], [96, 45, 7, 2],
-            [48, 99, 2, 7], [48, 99, 2, 7], [88, 101, 1, 8], [88, 101, 1, 8],
-            [80, 102, 0, 9], [103, 69, 10, 0], [104, 87, 9, 1], [104, 87, 9, 1],
-            [106, 57, 8, 2], [106, 57, 8, 2], [62, 109, 2, 8], [62, 109, 2, 8],
-            [88, 111, 1, 9], [88, 111, 1, 9], [80, 112, 0, 10], [113, 85, 11, 0],
-            [114, 87, 10, 1], [114, 87, 10, 1], [116, 57, 9, 2], [116, 57, 9, 2],
-            [62, 119, 2, 9], [62, 119, 2, 9], [88, 121, 1, 10], [88, 121, 1, 10],
-            [90, 122, 0, 11], [123, 85, 12, 0], [124, 97, 11, 1], [124, 97, 11, 1],
-            [126, 57, 10, 2], [126, 57, 10, 2], [62, 129, 2, 10], [62, 129, 2, 10],
-            [98, 131, 1, 11], [98, 131, 1, 11], [90, 132, 0, 12], [133, 85, 13, 0],
-            [134, 97, 12, 1], [134, 97, 12, 1], [136, 57, 11, 2], [136, 57, 11, 2],
-            [62, 139, 2, 11], [62, 139, 2, 11], [98, 141, 1, 12], [98, 141, 1, 12],
-            [90, 142, 0, 13], [143, 95, 14, 0], [144, 97, 13, 1], [144, 97, 13, 1],
-            [68, 57, 12, 2], [68, 57, 12, 2], [62, 81, 2, 12], [62, 81, 2, 12],
-            [98, 147, 1, 13], [98, 147, 1, 13], [100, 148, 0, 14], [149, 95, 15, 0],
-            [150, 107, 14, 1], [150, 107, 14, 1], [108, 151, 1, 14], [108, 151, 1, 14],
-            [100, 152, 0, 15], [153, 95, 16, 0], [154, 107, 15, 1], [108, 155, 1, 15],
-            [100, 156, 0, 16], [157, 95, 17, 0], [158, 107, 16, 1], [108, 159, 1, 16],
-            [100, 160, 0, 17], [161, 105, 18, 0], [162, 107, 17, 1], [108, 163, 1, 17],
-            [110, 164, 0, 18], [165, 105, 19, 0], [166, 117, 18, 1], [118, 167, 1, 18],
-            [110, 168, 0, 19], [169, 105, 20, 0], [170, 117, 19, 1], [118, 171, 1, 19],
-            [110, 172, 0, 20], [173, 105, 21, 0], [174, 117, 20, 1], [118, 175, 1, 20],
-            [110, 176, 0, 21], [177, 105, 22, 0], [178, 117, 21, 1], [118, 179, 1, 21],
-            [120, 184, 0, 23], [185, 115, 24, 0], [186, 127, 23, 1], [128, 187, 1, 23],
-            [120, 188, 0, 24], [189, 115, 25, 0], [190, 127, 24, 1], [128, 191, 1, 24],
-            [120, 192, 0, 25], [193, 115, 26, 0], [194, 127, 25, 1], [128, 195, 1, 25],
-            [120, 196, 0, 26], [197, 115, 27, 0], [198, 127, 26, 1], [128, 199, 1, 26],
-            [120, 200, 0, 27], [201, 115, 28, 0], [202, 127, 27, 1], [128, 203, 1, 27],
-            [120, 204, 0, 28], [205, 115, 29, 0], [206, 127, 28, 1], [128, 207, 1, 28],
-            [120, 208, 0, 29], [209, 125, 30, 0], [210, 127, 29, 1], [128, 211, 1, 29],
-            [130, 212, 0, 30], [213, 125, 31, 0], [214, 137, 30, 1], [138, 215, 1, 30],
-            [130, 216, 0, 31], [217, 125, 32, 0], [218, 137, 31, 1], [138, 219, 1, 31],
-            [130, 220, 0, 32], [221, 125, 33, 0], [222, 137, 32, 1], [138, 223, 1, 32],
-            [130, 224, 0, 33], [225, 125, 34, 0], [226, 137, 33, 1], [138, 227, 1, 33],
-            [130, 228, 0, 34], [229, 125, 35, 0], [230, 137, 34, 1], [138, 231, 1, 34],
-            [130, 232, 0, 35], [233, 125, 36, 0], [234, 137, 35, 1], [138, 235, 1, 35],
-            [130, 236, 0, 36], [237, 125, 37, 0], [238, 137, 36, 1], [138, 239, 1, 36],
-            [130, 240, 0, 37], [241, 125, 38, 0], [242, 137, 37, 1], [138, 243, 1, 37],
-            [130, 244, 0, 38], [245, 135, 39, 0], [246, 137, 38, 1], [138, 247, 1, 38],
-            [140, 248, 0, 39], [249, 135, 40, 0], [250, 69, 39, 1], [80, 251, 1, 39],
-            [140, 252, 0, 40], [249, 135, 41, 0], [250, 69, 40, 1], [80, 251, 1, 40],
-            [140, 252, 0, 41]
-        ]
-    
-    def nex(self, state: int, sel: int) -> int:
-        return self.table[state][sel]
-
-nex = StateTable()
-
-# Helper Functions
 def transform_with_prime_xor_every_3_bytes(data, repeat=100):
     transformed = bytearray(data)
     for prime in PRIMES:
@@ -302,66 +155,13 @@ def find_nearest_prime_around(n):
             return n + offset
         offset += 1
 
-def quit(message: str = None):
-    if message:
-        print(message)
-    sys.exit(1)
-
-def ilog(x: int) -> int:
-    if x < 0:
-        return 0
-    l = 0
-    while x > 0:
-        x >>= 1
-        l += 1
-    return l
-
-def squash(d: int, n: int = 12, repeat: int = 1000) -> int:
-    max_output = (1 << n) - 1
-    result = d
-    for _ in range(repeat):
-        if result > 2047:
-            result = max_output
-        if result < -2047:
-            result = 0
-        scaled = (1 << n) / (1 + math.exp(-result / 512.0))
-        result = int(scaled)
-        result = min(max(result, 0), max_output)
-    return result
-
-def stretch(p: int) -> int:
-    t = Array(4096)
-    pi = 0
-    for x in range(-2047, 2048):
-        i = squash(x)
-        for j in range(pi, i + 1):
-            t[j] = x
-        pi = i + 1
-    t[4095] = 2047
-    return t[p]
-
-def hash(*args: int) -> int:
-    h = (args[0] * 200002979 + args[1] * 30005491 +
-         (args[2] if len(args) > 2 else 0xffffffff) * 50004239 +
-         (args[3] if len(args) > 3 else 0xffffffff) * 70004807 +
-         (args[4] if len(args) > 4 else 0xffffffff) * 110002499)
-    return h ^ (h >> 9) ^ (args[0] >> 2) ^ (args[1] >> 3) ^ (
-        (args[2] if len(args) > 2 else 0) >> 4) ^ (
-        (args[3] if len(args) > 3 else 0) >> 5) ^ (
-        (args[4] if len(args) > 4 else 0) >> 6)
-
-# Smart Compressor with Dictionary and Transformations
+# === Smart Compressor (with dictionary functionality) ===
 class SmartCompressor:
     def __init__(self):
-        self.PI_DIGITS = PI_DIGITS
-        self.PRIMES = PRIMES
-        self.seed_tables = self.generate_seed_tables()
-        self.SQUARE_OF_ROOT = 2
-        self.ADD_NUMBERS = 1
-        self.MULTIPLY = 3
         self.dictionaries = self.load_dictionaries()
 
     def load_dictionaries(self):
+        """Load dictionary files for hash searching."""
         data = []
         for filename in DICTIONARY_FILES:
             if os.path.exists(filename):
@@ -376,12 +176,15 @@ class SmartCompressor:
         return data
 
     def compute_sha256(self, data):
+        """Compute SHA-256 hash of data in hexadecimal."""
         return hashlib.sha256(data).hexdigest()
 
     def compute_sha256_binary(self, data):
+        """Compute SHA-256 hash of data in binary (32 bytes)."""
         return hashlib.sha256(data).digest()
 
     def find_hash_in_dictionaries(self, hash_hex):
+        """Search for the hash in dictionary files."""
         for filename in DICTIONARY_FILES:
             if not os.path.exists(filename):
                 continue
@@ -396,12 +199,125 @@ class SmartCompressor:
         return None
 
     def generate_8byte_sha(self, data):
+        """Generate first 8 bytes of SHA-256 hash for a file."""
         try:
             full_hash = hashlib.sha256(data).digest()
             return full_hash[:8]
         except Exception as e:
             logging.error(f"Failed to generate SHA: {e}")
             return None
+
+    def paq_compress(self, data):
+        """Compress data using PAQ9a (lossless)."""
+        if not data:
+            logging.warning("paq_compress: Empty input data, returning empty bytes")
+            return b''
+        try:
+            compressed = paq.compress(data)
+            logging.info("PAQ9a compression complete.")
+            return compressed
+        except Exception as e:
+            logging.error(f"PAQ9a compression failed: {e}")
+            return None
+
+    def paq_decompress(self, data):
+        """Decompress data using PAQ9a (lossless)."""
+        if not data:
+            logging.warning("paq_decompress: Empty input data, returning empty bytes")
+            return b''
+        try:
+            decompressed = paq.decompress(data)
+            logging.info("PAQ9a decompression complete.")
+            return decompressed
+        except Exception as e:
+            logging.error(f"PAQ9a decompression failed: {e}")
+            return None
+
+    def reversible_transform(self, data):
+        """Apply reversible XOR transform with 0xAA."""
+        logging.info("Applying XOR transform (0xAA)...")
+        transformed = bytes(b ^ 0xAA for b in data)
+        logging.info("XOR transform complete.")
+        return transformed
+
+    def reverse_reversible_transform(self, data):
+        """Reverse the XOR transform (symmetric)."""
+        logging.info("Reversing XOR transform (0xAA)...")
+        transformed = self.reversible_transform(data)  # XOR with 0xAA is symmetric
+        logging.info("XOR transform reversed.")
+        return transformed
+
+    def compress(self, input_data, input_file):
+        """Compress data with dictionary-based hash verification."""
+        if not input_data:
+            logging.warning("Empty input data, returning minimal output")
+            return bytes([0])
+
+        original_hash = self.compute_sha256(input_data)
+        logging.info(f"SHA-256 of input: {original_hash[:16]}...")
+
+        # Check if hash exists in dictionaries
+        found = self.find_hash_in_dictionaries(original_hash)
+        if found:
+            logging.info(f"Hash found in dictionary: {found}")
+        else:
+            logging.info("Hash not found in any dictionary. Proceeding with lossless compression.")
+
+        # Special case for .paq dictionary files
+        if input_file.endswith(".paq") and any(x in input_file for x in ["words", "lines", "sentence"]):
+            sha = self.generate_8byte_sha(input_data)
+            if sha and len(input_data) > 8:
+                logging.info(f"SHA-8 for .paq file: {sha.hex()}")
+                return sha
+            logging.info("Original file smaller than SHA hash, skipping compression.")
+            return None
+
+        # Normal compression flow (lossless)
+        transformed = self.reversible_transform(input_data)
+        compressed = self.paq_compress(transformed)
+        if compressed is None:
+            logging.error("Compression failed.")
+            return None
+
+        if len(compressed) < len(input_data):
+            output = self.compute_sha256_binary(input_data) + compressed
+            logging.info(f"Smart compression successful. Original size: {len(input_data)} bytes, Compressed size: {len(compressed)} bytes")
+            return output
+        else:
+            logging.info("Compression not efficient. Returning None.")
+            return None
+
+    def decompress(self, input_data):
+        """Decompress data with hash verification."""
+        if len(input_data) < 32:
+            logging.error("Input data too short for Smart Compressor.")
+            return None
+
+        stored_hash = input_data[:32]
+        compressed_data = input_data[32:]
+
+        decompressed = self.paq_decompress(compressed_data)
+        if decompressed is None:
+            return None
+
+        original = self.reverse_reversible_transform(decompressed)
+        computed_hash = self.compute_sha256_binary(original)
+        if computed_hash == stored_hash:
+            logging.info("Hash verification successful.")
+            return original
+        else:
+            logging.error("Hash verification failed! Data may be corrupted.")
+            return None
+
+# === PAQJP Compressor (without datetime) ===
+class PAQJPCompressor:
+    def __init__(self):
+        self.PI_DIGITS = PI_DIGITS
+        self.PRIMES = PRIMES
+        self.seed_tables = self.generate_seed_tables()
+        self.SQUARE_OF_ROOT = 2
+        self.ADD_NUMBERS = 1
+        self.MULTIPLY = 3
 
     def generate_seed_tables(self, num_tables=126, table_size=256, min_val=5, max_val=255, seed=42):
         random.seed(seed)
@@ -415,39 +331,6 @@ class SmartCompressor:
         if 0 <= table_idx < len(self.seed_tables):
             return self.seed_tables[table_idx][value % len(self.seed_tables[table_idx])]
         return 0
-
-    def binary_to_file(self, binary_data, filename):
-        try:
-            if not binary_data:
-                logging.warning(f"Empty binary data, writing empty file to {filename}")
-                with open(filename, 'wb') as f:
-                    f.write(b'')
-                return True
-            n = int(binary_data, 2)
-            num_bytes = (len(binary_data) + 7) // 8
-            hex_str = "%0*x" % (num_bytes * 2, n)
-            if len(hex_str) % 2 != 0:
-                hex_str = '0' + hex_str
-            byte_data = binascii.unhexlify(hex_str)
-            with open(filename, 'wb') as f:
-                f.write(byte_data)
-            return True
-        except Exception as e:
-            logging.error(f"Error saving file: {str(e)}")
-            return False
-
-    def file_to_binary(self, filename):
-        try:
-            with open(filename, 'rb') as f:
-                data = f.read()
-                if not data:
-                    logging.warning(f"Empty file {filename}, returning empty binary string")
-                    return ""
-                binary_str = bin(int(binascii.hexlify(data), 16))[2:].zfill(len(data) * 8)
-                return binary_str
-        except Exception as e:
-            logging.error(f"Error reading file: {str(e)}")
-            return None
 
     def calculate_frequencies(self, binary_str):
         if not binary_str:
@@ -524,9 +407,7 @@ class SmartCompressor:
             logging.warning("paq_compress: Empty input data, returning empty bytes")
             return b''
         try:
-            compressed = paq.compress(data)
-            logging.info("PAQ9a compression complete.")
-            return compressed
+            return paq.compress(data)
         except Exception as e:
             logging.error(f"PAQ9a compression failed: {e}")
             return None
@@ -536,44 +417,10 @@ class SmartCompressor:
             logging.warning("paq_decompress: Empty input data, returning empty bytes")
             return b''
         try:
-            decompressed = paq.decompress(data)
-            logging.info("PAQ9a decompression complete.")
-            return decompressed
+            return paq.decompress(data)
         except Exception as e:
             logging.error(f"PAQ9a decompression failed: {e}")
             return None
-
-    def compress_data_zlib(self, data_bytes):
-        if not data_bytes:
-            logging.warning("Empty data bytes, returning empty compressed data")
-            return b''
-        try:
-            return zlib.compress(data_bytes)
-        except zlib.error as e:
-            logging.error(f"zlib compression error: {e}")
-            return None
-
-    def decompress_data_zlib(self, compressed_data):
-        if not compressed_data:
-            logging.warning("Empty compressed data, returning empty decompressed data")
-            return b''
-        try:
-            return zlib.decompress(compressed_data)
-        except zlib.error as e:
-            logging.error(f"zlib decompression error: {e}")
-            return None
-
-    def reversible_transform(self, data):
-        logging.info("Applying XOR transform (0xAA)...")
-        transformed = bytes(b ^ 0xAA for b in data)
-        logging.info("XOR transform complete.")
-        return transformed
-
-    def reverse_reversible_transform(self, data):
-        logging.info("Reversing XOR transform (0xAA)...")
-        transformed = self.reversible_transform(data)  # XOR with 0xAA is symmetric
-        logging.info("XOR transform reversed.")
-        return transformed
 
     def transform_01(self, data, repeat=100):
         if not data:
@@ -943,63 +790,6 @@ class SmartCompressor:
             return bytes(transformed)
         return transform, reverse_transform
 
-    def compress(self, input_data, input_file):
-        if not input_data:
-            logging.warning("Empty input data, returning minimal output")
-            return bytes([0])
-
-        original_hash = self.compute_sha256(input_data)
-        logging.info(f"SHA-256 of input: {original_hash[:16]}...")
-
-        found = self.find_hash_in_dictionaries(original_hash)
-        if found:
-            logging.info(f"Hash found in dictionary: {found}")
-        else:
-            logging.info("Hash not found in any dictionary. Proceeding with lossless compression.")
-
-        if input_file.endswith(".paq") and any(x in input_file for x in ["words", "lines", "sentence"]):
-            sha = self.generate_8byte_sha(input_data)
-            if sha and len(input_data) > 8:
-                logging.info(f"SHA-8 for .paq file: {sha.hex()}")
-                return sha
-            logging.info("Original file smaller than SHA hash, skipping compression.")
-            return None
-
-        transformed = self.reversible_transform(input_data)
-        compressed = self.paq_compress(transformed)
-        if compressed is None:
-            logging.error("Compression failed.")
-            return None
-
-        if len(compressed) < len(input_data):
-            output = self.compute_sha256_binary(input_data) + compressed
-            logging.info(f"Smart compression successful. Original size: {len(input_data)} bytes, Compressed size: {len(compressed)} bytes")
-            return output
-        else:
-            logging.info("Compression not efficient. Returning None.")
-            return None
-
-    def decompress(self, input_data):
-        if len(input_data) < 32:
-            logging.error("Input data too short for Smart Compressor.")
-            return None
-
-        stored_hash = input_data[:32]
-        compressed_data = input_data[32:]
-
-        decompressed = self.paq_decompress(compressed_data)
-        if decompressed is None:
-            return None
-
-        original = self.reverse_reversible_transform(decompressed)
-        computed_hash = self.compute_sha256_binary(original)
-        if computed_hash == stored_hash:
-            logging.info("Hash verification successful.")
-            return original
-        else:
-            logging.error("Hash verification failed! Data may be corrupted.")
-            return None
-
     def compress_with_best_method(self, data, filetype, input_filename, mode="slow"):
         if not data:
             logging.warning("compress_with_best_method: Empty input data, returning minimal marker")
@@ -1029,10 +819,7 @@ class SmartCompressor:
                               [(i, self.generate_transform_method(i)[0]) for i in range(12, 256)]
             transformations = prioritized + [t for t in transformations if t[0] not in [7, 8, 9, 10, 11] + list(range(12, 256))]
 
-        methods = [
-            ('paq', self.paq_compress),
-            ('zlib', self.compress_data_zlib),
-        ]
+        methods = [('paq', self.paq_compress)]
         best_compressed = None
         best_size = float('inf')
         best_marker = None
@@ -1124,77 +911,17 @@ class SmartCompressor:
             logging.info(f"Decompressed with marker {method_marker}, {zero_count} zero bytes in result")
             return result, method_marker
         except Exception as e:
-            logging.warning(f"PAQ decompression failed: {e}. Trying zlib...")
-            decompressed = self.decompress_data_zlib(compressed_data)
-            if decompressed is None:
-                logging.error("All decompression methods failed")
-                return b'', None
-            result = reverse_transforms[method_marker](decompressed)
-            zero_count = sum(1 for b in result if b == 0)
-            logging.info(f"Decompressed with marker {method_marker} using zlib, {zero_count} zero bytes in result")
-            return result, method_marker
+            logging.error(f"PAQ decompression failed: {e}")
+            return b'', None
 
-    def compress_with_zlib_method(self, data, filetype, input_filename, mode="slow"):
-        if not data:
-            logging.warning("compress_with_zlib_method: Empty input data, returning minimal marker")
-            return bytes([0])
-
-        fast_transformations = [
-            (1, self.transform_04),
-            (2, self.transform_01),
-            (3, self.transform_03),
-            (5, self.transform_05),
-            (6, self.transform_06),
-            (7, self.transform_07),
-            (8, self.transform_08),
-            (9, self.transform_09),
-        ]
-        slow_transformations = fast_transformations + [
-            (10, self.transform_10),
-            (11, self.transform_11),
-        ] + [(i, self.generate_transform_method(i)[0]) for i in range(12, 256)]
-
-        transformations = slow_transformations if mode == "slow" else fast_transformations
-
-        if filetype in [Filetype.JPEG, Filetype.TEXT]:
-            prioritized = [(7, self.transform_07), (8, self.transform_08), (9, self.transform_09)]
-            if mode == "slow":
-                prioritized += [(10, self.transform_10), (11, self.transform_11)] + \
-                              [(i, self.generate_transform_method(i)[0]) for i in range(12, 256)]
-            transformations = prioritized + [t for t in transformations if t[0] not in [7, 8, 9, 10, 11] + list(range(12, 256))]
-
-        best_compressed = None
-        best_size = float('inf')
-        best_marker = None
-
-        for marker, transform in transformations:
-            transformed = transform(data)
-            try:
-                compressed = self.compress_data_zlib(transformed)
-                if compressed is None:
-                    continue
-                size = len(compressed)
-                if size < best_size:
-                    best_size = size
-                    best_compressed = compressed
-                    best_marker = marker
-            except Exception as e:
-                logging.warning(f"zlib compression with transform {marker} failed: {e}")
-                continue
-
-        if best_compressed is None:
-            logging.error("All zlib compression methods failed, returning original data with marker 0")
-            return bytes([0]) + data
-
-        logging.info(f"Best zlib compression with Marker: {best_marker} for {filetype.name} in {mode} mode")
-        return bytes([best_marker]) + best_compressed
-
-# Combined Compressor
+# === Combined Compressor ===
 class CombinedCompressor:
     def __init__(self):
         self.smart_compressor = SmartCompressor()
+        self.paqjp_compressor = PAQJPCompressor()
 
     def compress(self, input_file, output_file, mode="slow"):
+        """Compress file using the best method (Smart Compressor or PAQJP_6)."""
         if not os.path.exists(input_file):
             logging.error(f"Input file {input_file} not found.")
             return
@@ -1210,37 +937,29 @@ class CombinedCompressor:
         with open(input_file, "rb") as f:
             input_data = f.read()
 
-        # Smart Compressor (marker 00)
+        # Try Smart Compressor (marker 00)
         smart_compressed = self.smart_compressor.compress(input_data, input_file)
         smart_output = bytes([0x00]) + smart_compressed if smart_compressed else b''
 
-        # PAQJP_6 Compressor (marker 01)
+        # Try PAQJP_6 Compressor (marker 01)
         filetype = detect_filetype(input_file)
-        paqjp_compressed = self.smart_compressor.compress_with_best_method(input_data, filetype, input_file, mode=mode)
+        paqjp_compressed = self.paqjp_compressor.compress_with_best_method(input_data, filetype, input_file, mode=mode)
         paqjp_output = bytes([0x01]) + paqjp_compressed if paqjp_compressed else b''
 
-        # zlib Compressor with no transform (marker 02)
-        zlib_no_transform = self.smart_compressor.compress_data_zlib(input_data)
-        zlib_no_transform_output = bytes([0x02]) + zlib_no_transform if zlib_no_transform else b''
-
-        # zlib Compressor with best transform (marker 03)
-        zlib_compressed = self.smart_compressor.compress_with_zlib_method(input_data, filetype, input_file, mode=mode)
-        zlib_output = bytes([0x03]) + zlib_compressed if zlib_compressed else b''
-
         # Choose the best (smallest) output
-        outputs = [
-            (smart_output, "Smart Compressor"),
-            (paqjp_output, "PAQJP_6"),
-            (zlib_no_transform_output, "zlib no transform"),
-            (zlib_output, "zlib with transform")
-        ]
-        valid_outputs = [(out, name) for out, name in outputs if out]
-        if not valid_outputs:
-            logging.error("All compression methods failed.")
+        best_output = None
+        if smart_output and paqjp_output:
+            best_output = smart_output if len(smart_output) <= len(paqjp_output) else paqjp_output
+            logging.info(f"Selected {'Smart Compressor' if best_output[0] == 0x00 else 'PAQJP_6'} with size {len(best_output)} bytes")
+        elif smart_output:
+            best_output = smart_output
+            logging.info(f"Selected Smart Compressor with size {len(smart_output)} bytes")
+        elif paqjp_output:
+            best_output = paqjp_output
+            logging.info(f"Selected PAQJP_6 with size {len(paqjp_output)} bytes")
+        else:
+            logging.error("Both compression methods failed.")
             return
-
-        best_output, best_name = min(valid_outputs, key=lambda x: len(x[0]))
-        logging.info(f"Selected {best_name} with size {len(best_output)} bytes")
 
         with open(output_file, "wb") as f_out:
             f_out.write(best_output)
@@ -1251,6 +970,7 @@ class CombinedCompressor:
         logging.info(f"Original: {orig_size} bytes, Compressed: {comp_size} bytes, Ratio: {ratio:.2f}%")
 
     def decompress(self, input_file, output_file):
+        """Decompress file based on the marker."""
         if not os.path.exists(input_file):
             logging.error(f"Input file {input_file} not found.")
             return
@@ -1278,27 +998,7 @@ class CombinedCompressor:
             decompressed = self.smart_compressor.decompress(compressed_data)
         elif marker == 0x01:
             logging.info("Detected PAQJP_6 Compressor (marker 01)")
-            decompressed, method_marker = self.smart_compressor.decompress_with_best_method(compressed_data)
-            if decompressed and method_marker in [7, 8, 9, 10, 11] + list(range(12, 256)):
-                orig_ext = os.path.splitext(input_file)[1].lower()
-                if not output_file.endswith(('.jpg', '.jpeg', '.txt')):
-                    if orig_ext in ['.jpg', '.jpeg']:
-                        output_file += '.jpg'
-                    elif orig_ext == '.txt':
-                        output_file += '.txt'
-        elif marker == 0x02:
-            logging.info("Detected zlib no transform (marker 02)")
-            decompressed = self.smart_compressor.decompress_data_zlib(compressed_data)
-        elif marker == 0x03:
-            logging.info("Detected zlib with transform (marker 03)")
-            decompressed, method_marker = self.smart_compressor.decompress_with_best_method(compressed_data)
-            if decompressed and method_marker in [7, 8, 9, 10, 11] + list(range(12, 256)):
-                orig_ext = os.path.splitext(input_file)[1].lower()
-                if not output_file.endswith(('.jpg', '.jpeg', '.txt')):
-                    if orig_ext in ['.jpg', '.jpeg']:
-                        output_file += '.jpg'
-                    elif orig_ext == '.txt':
-                        output_file += '.txt'
+            decompressed, _ = self.paqjp_compressor.decompress_with_best_method(compressed_data)
         else:
             logging.error(f"Unknown compression marker: {marker:02x}")
             return
@@ -1309,7 +1009,6 @@ class CombinedCompressor:
 
         with open(output_file, "wb") as f_out:
             f_out.write(decompressed)
-
         comp_size = len(data)
         decomp_size = len(decompressed)
         zero_count = sum(1 for b in decompressed if b == 0)
@@ -1317,6 +1016,7 @@ class CombinedCompressor:
         logging.info(f"Compressed: {comp_size} bytes, Decompressed: {decomp_size} bytes")
 
 def detect_filetype(filename: str) -> Filetype:
+    """Detect filetype based on extension."""
     _, ext = os.path.splitext(filename.lower())
     if ext in ['.jpg', '.jpeg']:
         return Filetype.JPEG
@@ -1326,10 +1026,10 @@ def detect_filetype(filename: str) -> Filetype:
         return Filetype.DEFAULT
 
 def main():
-    print("PAQJP_6_Smart Compression System with Dictionary and Base-10 Pi Transformation")
+    print("PAQJP_6_Smart Compression System with Dictionary")
     print("Created by Jurijus Pacalovas")
     print("Options:")
-    print("1 - Compress file (Best of Smart Compressor [00], PAQJP_6 [01], zlib no transform [02], or zlib with transform [03])")
+    print("1 - Compress file (Best of Smart Compressor [00] or PAQJP_6 [01])")
     print("2 - Decompress file")
 
     compressor = CombinedCompressor()
