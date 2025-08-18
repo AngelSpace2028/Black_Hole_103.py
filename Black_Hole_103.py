@@ -28,7 +28,7 @@ MEM = 1 << 15  # 32,768
 
 # === Dictionary file list ===
 DICTIONARY_FILES = [
-    "eng_news_2005_1M-sentences.txt", "eng_news_2005_1M-words.txt",
+    "words_enwik8.txt","eng_news_2005_1M-sentences.txt", "eng_news_2005_1M-words.txt",
     "eng_news_2005_1M-sources.txt", "eng_news_2005_1M-co_n.txt",
     "eng_news_2005_1M-co_s.txt", "eng_news_2005_1M-inv_so.txt",
     "eng_news_2005_1M-meta.txt", "Dictionary.txt",
