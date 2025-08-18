@@ -1,3 +1,2 @@
-pip install mpmath
 pip install cython
 pip install paq
